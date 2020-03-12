@@ -6,13 +6,15 @@ import time
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pandas as pd
+from random import randint
+from time import sleep
 
 date = datetime.utcnow().strftime("%Y-%m-%d")
 print(date)
 tags_global = []
 post_lists_list = []
 path_tags_master = os.path.join(os.getcwd(),'csv_files/tags_master.txt')
-path_tags_posts = os.path.join(os.getcwd(),'csv_files/tags_posts_'+date+'.txt')
+path_tags_posts = os.path.join(os.getcwd(),'csv_files/daily_post_pulls/tags_posts_'+date+'.txt')
 
 url = 'https://stackoverflow.com/jobs?sort=p&pg=1'
 def main():
@@ -22,15 +24,14 @@ def main():
      i=0
 
      init_vals()
-     #25 cycles will typically get us either in the last 24hours or a little bit over
-     #so we only need to run this once a day to get our data
-     while(i<25):
+
+     while(keep_going(url)):
          i+=1
-         print(i)
+         print('on page '+str(i))
          url = 'https://stackoverflow.com/jobs?sort=i&pg='+str(i)
          parse_page(url)
         
-     df = pd.DataFrame(tags_global)
+     df = pd.DataFrame(sorted(tags_global))
      df.to_csv(r''+path_tags_master, index=None)
 
      df = pd.DataFrame(post_lists_list)
@@ -43,10 +44,16 @@ def init_vals():
     global tags_global
     global post_lists_list
     if path.exists(os.path.join(os.getcwd(),'csv_files')):
-        print('folder present')
+        print('csv folder present')
     else:
-        print('building folder')
+        print('building csv folder')
         os.mkdir(os.path.join(os.getcwd(),'csv_files'))
+
+    if path.exists(os.path.join(os.getcwd(),'csv_files/daily_post_pulls')):
+        print('daily folder present')
+    else:
+        print('building daily folder')
+        os.mkdir(os.path.join(os.getcwd(),'csv_files/daily_post_pulls'))
 
     if path.isfile(path_tags_master):
         print('global tags avaliable')
@@ -86,15 +93,29 @@ def parse_page(url):
                 print('new tag! '+str(tag.getText()))
                 tags_global.append(tag.getText())
             postList.append(tag.getText())
+        post_lists_list.append(postList)
 
-        #the below lines only exist to test and make sure that we are infact getting around 24hrs of jobs with our cycles
-        #it also delays the bot from scraping so quickly, which is good for not irritating stack-overflow
+def keep_going(url):
+     #do a good turn, don't request bomb SF
+    sleep(randint(5,20))
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    posts = soup.findAll("div",{"data-jobid":True})
+    for post in posts:
         soup3 = BeautifulSoup(str(post),'html.parser')
         grid_cells = soup3.find_all("div",{"class":"mt8 fs-caption fc-black-500 grid gs8 gsx fw-wrap"})
+        go = 0
         for grid_cell in grid_cells:
             for line in grid_cell.getText().split("\n"):
-                if 'ago' in line:
-                    print(line)
-        post_lists_list.append(postList)
+                if 'yesterday' in line:
+                    go = -1
+                else:
+                    pass
+    if(go == 0):
+        print("GO!")
+        return True
+    else:
+        print("STOP!")
+        return False
 
 main()
